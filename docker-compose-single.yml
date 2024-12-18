@@ -1,0 +1,18 @@
+version: '3'
+
+networks:
+  be-network:
+    name: be_network
+
+services:
+  be:
+    image: registry.gitlab.com/acd-corporation/api-quiz:0.0.1
+    container_name: be-quiz
+    hostname: be-quiz
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    ports:
+      - 8020:8020
+    networks:
+      - be-network

@@ -1,0 +1,41 @@
+version: '3'
+
+volumes:
+  mongo-data:
+
+networks:
+  mongodb-network:
+    name: mongodb_network
+
+services:
+  api:
+    image: api-quiz
+    build: .
+    container_name: $API_QUIZ_CONTAINER_NAME
+    hostname: $API_QUIZ_HOST_NAME
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    ports:
+      - $SERVER_PORT:$SERVER_DOCKER_PORT
+    depends_on:
+      - db
+    networks:
+      - mongodb-network
+
+  db:
+    image: mongo:4.4.14
+    restart: unless-stopped
+    container_name: $MONGODB_CONTAINER_NAME
+    hostname: $MONGODB_HOST_NAME
+    environment:
+      - MONGO_INITDB_DATABASE=$MONGO_INITDB_DATABASE
+      - MONGO_INITDB_ROOT_USERNAME=$MONGO_INITDB_ROOT_USERNAME
+      - MONGO_INITDB_ROOT_PASSWORD=$MONGO_INITDB_ROOT_PASSWORD
+    ports:
+      - $MONGODB_LOCAL_PORT:$MONGODB_DOCKER_PORT
+    volumes:
+      - ./mongo-entrypoint:/docker-entrypoint-initdb.d
+      - ./mongo-data:/data/db
+    networks:
+      - mongodb-network

@@ -1,0 +1,66 @@
+variables:
+  CI_REGISTRY_IMAGE: registry.gitlab.com/acd-corporation/api-quiz
+  CI_REGISTRY_IMAGE_TAG: 0.0.1
+  API_SERVICE_NAME: be
+  SERVICE_CONTAINER_NAME: be-quiz
+
+stages:
+  - test
+  - build
+  - deploy 
+
+test:
+  stage: test
+  image: node:14.17.2
+  before_script:
+    - npm i --no-optional
+  script:
+    - npm run test
+    - npm run test -- --coverage
+    - echo "Tested successfully"
+  artifacts:
+    paths:
+      - node_modules/
+
+build:
+  stage: build
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" "$CI_REGISTRY_IMAGE" --password-stdin
+  script:
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_REGISTRY_IMAGE_TAG .
+    - docker push $CI_REGISTRY_IMAGE:$CI_REGISTRY_IMAGE_TAG 
+    - echo "Builded successfully"
+
+deploy:
+  stage: deploy
+  # except:
+  #   - master
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  before_script:
+    - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+    - eval $(ssh-agent -s)
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+    - chmod 700 ~/.ssh/id_rsa
+  script: 
+    - ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no root@$VULTR_IP_ADDRESS "
+        cd ~ && cd mode/api-quiz && ls"
+
+    - ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no root@$VULTR_IP_ADDRESS "
+        echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" "$CI_REGISTRY_IMAGE" --password-stdin"
+
+    - ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no root@$VULTR_IP_ADDRESS "
+        docker pull $CI_REGISTRY_IMAGE:$CI_REGISTRY_IMAGE_TAG"
+        
+    - ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no root@$VULTR_IP_ADDRESS "
+        cd ~ && cd mode/api-quiz && docker inspect $SERVICE_CONTAINER_NAME >/dev/null 2>&1 && docker-compose -f docker-compose-single.yml down"" || echo "Not exist""
+
+    - ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no root@$VULTR_IP_ADDRESS " 
+        cd ~ && cd mode/api-quiz && docker-compose -f docker-compose-single.yml up -d --build $API_SERVICE_NAME"
+
+    - echo "Deployed successfully"
